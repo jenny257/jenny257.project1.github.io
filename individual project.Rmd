@@ -1,0 +1,430 @@
+---
+title: "Individual project"
+author: "Jianing Shi"
+date: "2020/3/26"
+output: word_document
+---
+
+# Medical Cost Personal Datasets
+
+## Introduction
+
+### Goal of the project
+
+This is an analysis of the data set "Medical Cost Personal Datasets". The goal of this project is to find which of the predictors have the most impact on the prediction of the personal medical cost. I am interested in how does the different factor influence on the individual medical cost billed by health insurance, such as gender, age and so on. 
+
+### Describe the dataset
+
+```{r}
+#install R package "psych"
+library(psych)
+cost <- read.csv("C:/Users/jenny/Documents/insurance.csv", sep=",")
+str(cost)
+summary(cost)
+describe(cost)
+```
+
+In the code above, I used the r package "psych".
+There is 1338 observations of 7 variables.
+
+Inputs:
+1. age: age of primary beneficiary
+2. sex: insurance contractor gender, female, male
+3. bmi: body mass index, providing an understanding of body, weights that are relatively high or low relative to height, objective index of body weight (kg/m^2) using the ratio of height to weight, ideally 18.5 to 24.9
+4. children: number of children covered by health insurance/Number of dependents
+5. smoker: smoking
+6. region: the beneficiary's residential area in the US, northeast, southeast, southwest, northwest
+
+Output:
+1. charges: individual medical costs billed by health insurance.
+
+Note that the variables: sex, smoker and region are categorical variables. So I creat a table below to summrize the dataset.
+The dataset is simulated on the basis of demographic statistics from the US Census Bureau, according to the book from which it is from.
+
+```{r}
+name <- c("age", "sex", "bmi", "children", "smoker", "region", "charges")
+type <- c("num", "factor", "num", "num", "factor", "factor", "num")
+missingvalue <- c(rep(0,7))
+mytable <- matrix(c(name, type, missingvalue), nrow = 7, ncol =3, dimnames = list(c(1:7), c("name", "type", "missing value")))
+mytable
+```
+
+
+### What other people have done
+
+On the website of kaggle, I found that there was a person using that dataset, he was interested in "Can you accurately predict insurance costs?" The goal of his analysis is to predict the variable charges by comparing the significance of input variables in Python. There were not much of variable selection, and there were not much explanation of the variables. For their analysis, they used a single method to predict the result, by adding or dropping the predictors, they try to achieve a higher accuracy.
+
+### Main difference
+
+I will provide clear data visulization of the data set, and show the variable selection to avoid overfitting. Others wanted to know that how to predict the cost and reach a high accuracy. For this dataset, the output(charges) is non-categorical, so the method of predicting this data is limited. But I can still choose some different method of variable selections. By comparing the result of different variable selection method, and sub the result into the linear regression model, I will get the result of which method of variable selection is best fit for this data set.
+
+
+## Data visulization
+
+I will create some graphs to provide a data visualization. For those graphs below, I want to see the distribution of each variables, the correlation between each variables, the outliers and leverage of each variables.
+
+### Graph of all variables
+
+```{r}
+plot(cost)
+```
+
+The figure of all variables are not that clear to see, we can only see that there are some outliers for sex and region, and those outliers are above the maximum. I want to know more details about the variables, so I creat some graphs below.
+
+### Graph of the relationship between each input and output(charges)
+
+```{r}
+# age vs charges
+plot(charges~age, data = cost, main = "age vs charges")
+```
+
+From the plot above, clearly we can see that there are three groups of charges. The lowest one is from 0 to around 10000 dollars of the charges, and this group contains the most amount of people. The middle group is about 1000 to 30000 dollars. The highest group is above 30000 dollars. Also, for each group, as the age is increasing, the charge is also increasing.
+
+```{r}
+#sex vs charges
+plot(charges~sex, data = cost, main = "sex vs charges")
+```
+
+From the boxplot above, we can see that the median charge of both of female and male is around 10000 dollars, but the interquartile range for male is significantly higher than female. The minimum charge for both female and male is around 0 dollars, but the maximum charge for male is about 10000 dollars higher than female. Both of female and male have outliers.
+
+```{r}
+#bmi vs charges
+plot(charges~bmi, data = cost, main = "bmi vs charges")
+```
+
+The plot above shows that the higher charges(above 30000 dollars) always happens on people who has a bmi higher than 30.
+
+```{r}
+#children vs charges
+plot(charges~children, data = cost, main = "children vs charges")
+```
+
+The figure above shows that people that has 0 child has the highest medical cost. Also, as the number of children increases from 0 to 5, the cost decreases.
+
+```{r}
+#smoker vs charges
+plot(charges~smoker, data = cost, main = "smoker vs charges")
+```
+
+The boxplot shows a significant difference of the charges between non-smoker and smoker. As we can see, the median charges of non-smoker is below 10000 dollars with a maximum charge below 30000 dollars(with some outliers). For smoker, the minimum charge is about 15000 dollars, which is even higher than the maximum charge of non-smoker. The median charge of smoker is around 40000 dollars and the maximum charge is above 60000 dollars.
+
+```{r}
+#region vs charges
+plot(charges~region, data = cost, main = "region vs charges")
+```
+
+The median charge of all the four region are about the same, which is around 10000 dollars. The southeast region has the highest maximum charges(about 45000 dollars). The southwest region has the lowest maximum charges(below 30000 dollars). All of the four regions have outliers. 
+
+### Graph of correlation
+
+```{r}
+#graph of correlation of variables
+#install r package "corrplot"
+library(corrplot)
+cost_cor <- subset(cost, select = -c(2,5,6))
+corrplot(cor(cost_cor[, -3]), method = "color", type = "lower", number.cex = 0.7, order = "hclust",addCoef.col = "white", title = "correlation of inputs of the medical cost")
+```
+
+To plot the correlation graph, I use the r package "corrplot".
+First, I drop the categorical variables(sex, smoker and region), then I plot the correlation between the variables bmi, age and charges. The correlation is between -1 to 1, so the darker the color, the stronger the correlation. We can see that there are not such a strong correlation between those variables.
+
+## Graph of outliers
+
+```{r}
+#boxplot of the non-categorical variables
+cost_out1 <- subset(cost, select = -c(2,5,6,7))
+boxplot(cost_out1)
+
+#boxplot of the categorical variables
+cost_out2 <- subset(cost, select = -c(1,3,4,7))
+outlier1 <- par(mfrow = c(1,3))
+for (i in 1:3){
+  plot(charges~cost_out2[[i]], data = cost)
+  mtext(names(cost_out2)[i], cex = 0.8, side = 1, line = 2)
+}
+par(outlier1)
+```
+
+For the non-categorical variables, bmi shows some outliers above maximum.
+For the categorical variables, I compare those variables to the output "charges", and the boxplot shows that for both genders, there are some outliers above averages; for the non-smokers, there are some outliers above averages, and for all of the four regions, there are some outliers above averages.
+
+### Histogram of each variables
+
+```{r}
+#histogram of age
+library(RColorBrewer)
+col = brewer.pal(6,"Reds")
+col
+library(ggplot2)
+ggplot(data = cost, aes(x = age))+geom_histogram(aes(color = I("black"), fill = I("#FCBBA1")), binwidth = 5)+ggtitle("Histogram of age")+theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+From the histogram above, we can see that the data set contains a greater number of people who is under 20, and the number of people for each other ages are about the same.
+
+```{r}
+#histogram of sex
+plot(cost$sex, main = "Number of Each Gender", ylab = "number", ylim = c(0,800), col = "#FCBBA1")
+```
+
+As the figure shows above, both female and male are about 600 people in the data set.
+
+```{r}
+#histogram of bmi
+ggplot(data = cost, aes(x = bmi))+geom_histogram(aes(color = I("black"), fill = I("#FCBBA1")), binwidth = 1)+ggtitle("Histogram of bmi")+theme(plot.title = element_text(hjust = 0.5))
+```
+
+From the histogram above, we can see that the bmi of those people is normally distributed.
+
+```{r}
+#histogram of children
+ggplot(data = cost, aes(x = children))+geom_histogram(aes(color = I("black"), fill = I("#FCBBA1")), binwidth = 1, border = "black")+ggtitle("Histogram of children")+theme(plot.title = element_text(hjust = 0.5))
+```
+
+We can see that as the number of children increases, the number of people decreases. The most of people does not have a child (about 500).
+
+```{r}
+#histogram of smoker
+plot(cost$smoker, main = "Number of (non) smoker", ylab = "number", ylim = c(0,1200), col = "#FCBBA1")
+```
+
+There are about 1100 non-smokers and 300 smokers are contained in the dataset.
+
+```{r}
+#histogram of regions
+plot(cost$region, main = "Number of each region", ylab = "number", ylim = c(0,450), col = "#FCBBA1")
+```
+
+There are about 380 people in the region of southeast, which is the highest in the dataset. The patients in other three regions are about the same, which is about 320 patients.
+
+```{r}
+#histogram of charges
+ggplot(data = cost, aes(x = charges))+geom_histogram(aes(color = I("black"), fill = I("#FCBBA1")), binwidth = 2000)+ggtitle("Histogram of charges")
+```
+
+From the figure above, as the charges are increasing, the number of patients are decreasing, there are about 180 patients who has a medical cost lower than 2000 dollars.
+
+## Analysis
+
+### Linear Regression Model
+
+```{r}
+lm1 <- lm(charges~.,data = cost)
+summary(lm1)
+mse <- mean(lm1$residuals^2)
+mse
+```
+
+That is the full model of linear regression, in the summary above, we can see that this model can explain 75.09% of the observations. In the summary, age, bmi, children, smoker(yes), and region(southeast and southwest) are more important than other predictors. This model is a good model, but the MSE of the model is very large, so we still want a better model.
+
+In order to increase the accuracy of this model, we want to drop the influencial points.
+
+### Data Cleaning
+
+```{r}
+re = rstudent(lm1)
+plot(re, pch =20, cex = 1, main= "Residuals", col = brewer.pal(6,"Reds"))
+
+
+c = cooks.distance(lm1)
+h = head(cost[c > 4 * mean(c, na.rm=T), ])
+h
+re = rstudent(lm1)
+plot(c, pch = 20, cex = 1, main = "Outlier", col = brewer.pal(6,"Reds"))
+abline(h = 4*mean(c, na.rm = T), col = "Grey")
+
+cost <- cost[c <= 4 * mean(c, na.rm=T), ]
+str(cost)
+```
+
+From the plot above, we can see that there is a significantly decreasing of the influencial points. So from now on, I will use the clean data to do the following prediction.
+
+### New Linear Regression Model
+
+```{r}
+lm2 <- lm(charges~.,data = cost)
+summary(lm2)
+mse <- mean(lm2$residuals^2)
+mse
+```
+
+Comparing the two linear regression model above, the value of R-squared increased from 0.7509 to 0.8381, which means there are 83.81% of the variables can be well explained by the linear model. Also, the MSE decreased significantly. The predictor region(wouthwest) is no longer a significant predictor.
+
+Then, we can use the significant predictor to predict the model.
+
+```{r}
+lm3 <- lm(charges~age+bmi+children+smoker+region,data = cost)
+summary(lm3)
+mse <- mean(lm3$residuals^2)
+mse
+```
+
+
+### Split Data
+
+```{r}
+dim(cost)
+set.seed(1)
+cost$charges <- as.numeric(cost$charges)
+trainindex <- sample(1:635)
+train <- cost[trainindex,]
+test <- cost[-trainindex,]
+
+```
+
+
+### Ridge Regression Model
+
+```{r}
+library(plotrix)
+library(glmnet)
+library(Matrix)
+library(plotmo)
+
+trainm <- model.matrix(charges~.,data = train)[,-1]
+testm <-  model.matrix(charges~.,data = test)
+
+rm <- glmnet(trainm, train$charges, alpha = 0)
+
+plot_glmnet(rm, col = brewer.pal(6,"Reds"), ylim = c(-200,1000), lwd = 2)
+cvrm <- cv.glmnet(trainm, train$charges, alpha = 0)
+bestlam <- cvrm$lambda.min
+bestlam
+plot(cvrm, col = brewer.pal(6,"Reds"))
+predict(rm, type = "coefficients", s = bestlam)
+ridge.pred <- predict(rm, s = bestlam, newx = testm, type = "coefficients")
+
+```
+We can see that the value of lambda that results in the smallest cross-validation error is 983.349. But none of the coefficients are zero, because redge regression does not perform variable selection.
+
+## Data Sselection 
+
+###  Lasso Model
+
+```{r}
+lasso1 <- glmnet(trainm, train$charges, alpha = 1)
+lasso1
+plot(lasso1, col = brewer.pal(6,"Reds"), ylim = c(-200, 600), lwd = 2)
+cv.lasso  <- cv.glmnet(trainm, train$charges, alpha=1)
+plot(cv.lasso)
+bestlambda <- cv.lasso$lambda.min
+bestlambda
+
+preco <- predict(lasso1, newx = testm, s = bestlambda, type = "coefficients")
+preco
+
+```
+
+We can see that the value of lambda that results in the smallest cross-validation error is 44.59368. In the Lasso model, only the region northwest is not significant.
+
+### Decision Tree
+
+```{r}
+library(rpart)
+library(rpart.plot)
+set.seed(1)
+
+dt <- rpart(charges~., data = train)
+summary(dt)
+
+rpart.plot(dt, digits = 4, fallen.leaves = TRUE, type = 4, extra = 101,tweak = 1.6, col = brewer.pal(9,"Blues"))
+
+dt.pre <- predict(dt, data = test)
+summary(dt.pre)
+summary(test$charges)
+head(dt.pre, n=10)
+
+MSE <- mean((train$charges-dt.pre)^2)
+MSE
+
+```
+
+The MSE is large.
+
+### Random Forest
+
+```{r}
+library(randomForest)
+
+rf <- randomForest(charges~., data = train, ntree = 1000, mtry = sqrt(11), replace = TRUE, importance = TRUE)
+rf
+rf.pre = predict(rf, test)
+
+
+importance(rf)
+varImpPlot(rf)
+```
+
+From the figure above, we can see that smoker, age, bmi are more important than children, sex and region.
+
+### Forward Selection
+
+```{r}
+forward <- step(glm(charges~., data = cost), direction = "forward", test = "F")
+summary(forward)
+```
+
+The AIC of forward selection is 22537, and the predictor age, bmi, children, smoker are more significant than others.
+
+### Backward Selection
+
+```{r}
+backward <- step(glm(charges~., data = cost), direction = "backward", test = "F")
+summary(backward)
+```
+
+THe AIC is 22535, which is a little bit smaller than forward selection. The predictor age, bmi, children, smoker are significant.
+
+### SOme Comparision
+
+Above all, we can see the variable smoker, age, bmi are alwaye significant in all of the methods. The variable "children" is significant in some of the methods, but not significant in others. SO we want to test it in the regression model.
+
+```{r}
+# with variable children
+
+lm4 <- lm(charges~age+bmi+children+smoker, data = train)
+summary(lm4)
+
+```
+
+```{r}
+# without variable children
+
+lm5 <- lm(charges~age+bmi+smoker, data = train)
+summary(lm5)
+
+```
+
+By comparing the two summary above, we can see that with the variable children, the adjusted R-squared is 0.8491 which is a little bit higher than the adjusted R-squared of the prediction without children (0.8481). So, as we want a higher accuracy, we choose the variable children as a predictor.
+
+## Conclusion
+
+In conclustion, I choose the linear regression model with predictor age, bmi, smoker and children to predict the medical cost for a patient. 
+
+The final regression model is:
+
+charges = -12561.2 + 259.12 * age + 310.88 * bmi + 348.41 * children + 25073.53 * smoker
+
+In this project, I used some r package as following:
+
+psych
+corrplor
+RColorBrewer
+ggplot2
+plotrix
+glmnet
+Matrix
+plotmo
+rpart
+rpart.plot
+randomForest
+
+From this project, I learned how to describe a dataset, how to use the color chart to optimazies my figure, how to develop my code to optimazies my figure. I also learned that for different method, there are different results, we need to test and get our final answers.
+
+## Reference
+
+https://www.kaggle.com/janiobachmann/patient-charges-clustering-and-regression
+https://www.kaggle.com/datasets
+https://rdrr.io/cran/lmridge/man/summary.lmridge.html
+http://www.sthda.com/english/wiki/visualize-correlation-matrix-using-correlogram
+https://www.kaggle.com/mirichoi0218/insurance
